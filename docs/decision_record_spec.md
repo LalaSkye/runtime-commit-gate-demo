@@ -1,55 +1,48 @@
-# Decision Record Specification
+# Decision Record Spec
 
-**Version:** 0.1.0
-**Status:** ACTIVE
+Version: 0.1.0
 
-## Purpose
+## Structure
 
-A decision record is a signed, scoped, time-bound authorisation for a single governed action. Without one, no state mutation occurs.
-
-## Fields
-
-| Field | Type | Required | Description |
+| Field | Type | Required | Purpose |
 |---|---|---|---|
-| `decision_id` | string | yes | Unique identifier (e.g. `dr_a1b2c3d4e5f6`) |
-| `actor_id` | string | yes | Who is authorised to act |
-| `action` | string | yes | What action is authorised (closed set) |
-| `object_id` | string | yes | What object the action targets |
-| `environment` | string | yes | Where the action may execute |
-| `verdict` | string | yes | `ALLOW` or `DENY` (only `ALLOW` authorises) |
-| `policy_version` | string | yes | Which policy version issued this record |
-| `issued_at` | ISO 8601 | yes | When the record was created |
-| `expires_at` | ISO 8601 | yes | When the record becomes invalid |
-| `reason_codes` | array | yes | Why this verdict was reached |
-| `nonce` | string | yes | Single-use token for replay protection |
-| `signature` | string | yes | HMAC-SHA256 of canonical payload |
+| `decision_id` | string | yes | Unique ID |
+| `actor_id` | string | yes | Who acts |
+| `action` | string | yes | What action (closed set) |
+| `object_id` | string | yes | Target object |
+| `environment` | string | yes | Where |
+| `verdict` | string | yes | ALLOW or DENY |
+| `policy_version` | string | yes | Policy version |
+| `issued_at` | ISO 8601 | yes | When issued |
+| `expires_at` | ISO 8601 | yes | When invalid |
+| `reason_codes` | array | yes | Why |
+| `nonce` | string | yes | Single-use token |
+| `signature` | string | yes | HMAC-SHA256 |
 
-## Governed Actions (Closed Set)
+## Governed actions (closed set)
 
 - `approve_invoice`
 - `change_limit`
 - `delete_env`
 
-No other actions are accepted by the gate.
-
-## Canonical Payload
-
-The signature covers all fields except `signature` itself, serialised as deterministic JSON (sorted keys, no whitespace):
+## Signature
 
 ```
-HMAC-SHA256(secret, canonical_json(record_without_signature))
+HMAC-SHA256(secret, canonical_json(all_fields_except_signature))
 ```
 
-## Constraints
+Canonical JSON: sorted keys, no whitespace.
 
-1. `verdict` must be `ALLOW` for the gate to proceed
-2. `expires_at` must be in the future at time of evaluation
-3. `nonce` must not have been previously consumed
-4. `action`, `object_id`, and `environment` must exactly match the request
-5. `policy_version` must be in the accepted set
-6. `signature` must be valid against the canonical payload
+## Checks (all must pass)
 
-Failure on any constraint blocks the action. First failure stops evaluation.
+1. verdict == ALLOW
+2. expires_at > now
+3. nonce not previously consumed
+4. action, object_id, environment match the request
+5. policy_version in accepted set
+6. signature matches canonical payload
+
+Any failure -> BLOCKED.
 
 ## Example
 
@@ -66,6 +59,6 @@ Failure on any constraint blocks the action. First failure stops evaluation.
   "expires_at": "2026-03-28T18:05:00Z",
   "reason_codes": ["AUTH_VALID", "SCOPE_VALID"],
   "nonce": "abc123xyz",
-  "signature": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  "signature": "e3b0c44..."
 }
 ```

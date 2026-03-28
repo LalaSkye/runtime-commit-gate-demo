@@ -1,11 +1,7 @@
 #!/usr/bin/env python3
 """
-Runtime Commit Gate — 5-Step Proof Sequence
-
-Run this to see the gate in action. No server needed.
-Each step prints what happened and why.
-
-    python demo/run_demo.py
+5-step proof sequence.
+python demo/run_demo.py
 """
 
 import sys
@@ -59,13 +55,12 @@ def main():
     past = datetime(2025, 1, 1, tzinfo=timezone.utc)
 
     print("\n" + "=" * 60)
-    print("  RUNTIME COMMIT GATE — PROOF SEQUENCE")
-    print("  Invariant: No valid decision -> no state mutation")
+    print("  COMMIT GATE: 5-STEP PROOF")
+    print("  no valid decision -> no state mutation")
     print("=" * 60)
 
     # ── STEP 1: No decision -> BLOCKED ──
-    banner(1, "delete_env with NO decision record")
-    print("  Attempting to delete env_1 without any decision...")
+    banner(1, "no decision")
 
     result = gate.execute(
         action="delete_env",
@@ -78,7 +73,7 @@ def main():
     assert not result.allowed, "INVARIANT VIOLATION: mutation without decision!"
 
     # ── STEP 2: Valid decision -> ALLOWED ──
-    banner(2, "delete_env with VALID decision record")
+    banner(2, "valid decision")
 
     decision = make_record(
         actor_id="user_123",
@@ -108,8 +103,7 @@ def main():
     store.reset()
 
     # ── STEP 3: Replay same decision -> BLOCKED ──
-    banner(3, "REPLAY same decision (same nonce)")
-    print("  Re-using the exact decision from Step 2...")
+    banner(3, "replay (same nonce)")
 
     result = gate.execute(
         action="delete_env",
@@ -122,7 +116,7 @@ def main():
     assert not result.allowed, "INVARIANT VIOLATION: replay should be blocked!"
 
     # ── STEP 4: Decision for env_1, request targets env_2 -> BLOCKED ──
-    banner(4, "Decision scoped to env_1, request targets env_2")
+    banner(4, "scope mismatch (env_1 vs env_2)")
 
     decision_env1 = make_record(
         actor_id="user_123",
@@ -133,9 +127,7 @@ def main():
         expires_at=(now + timedelta(minutes=5)).isoformat(),
     )
 
-    print(f"  Decision scoped to: env_1")
-    print(f"  Request targets:    env_2")
-    print()
+
 
     result = gate.execute(
         action="delete_env",
@@ -148,7 +140,7 @@ def main():
     assert not result.allowed, "INVARIANT VIOLATION: scope mismatch should block!"
 
     # ── STEP 5: Expired decision -> BLOCKED ──
-    banner(5, "EXPIRED decision record")
+    banner(5, "expired decision")
 
     expired = make_record(
         actor_id="user_123",
@@ -183,10 +175,7 @@ def main():
         print(f"  [{i}] {entry['outcome']:8s} | {entry['reason']:40s} | {entry['action']}/{entry['object_id']}")
 
     print(f"\n{'='*60}")
-    print("  PROOF COMPLETE")
-    print()
     print("  5 attempts. 1 allowed. 4 blocked.")
-    print("  No valid decision -> no state mutation.")
     print(f"{'='*60}\n")
 
     # Cleanup

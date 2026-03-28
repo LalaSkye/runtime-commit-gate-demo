@@ -1,13 +1,12 @@
 """
-Server — four endpoints, one gate.
+Server. Four endpoints, one gate.
 
-POST /decide  — issue a signed decision record (demo convenience)
-POST /execute — attempt a governed action through the gate
-GET  /state   — read current state
-GET  /audit   — read append-only audit log
+POST /decide  - issue a signed decision record
+POST /execute - attempt a governed action through the gate
+GET  /state   - read current state
+GET  /audit   - read append-only audit log
 
-The server never calls state_store.apply_mutation() directly.
-Every mutation goes through the gate. That is the whole point.
+server.py never calls state_store.apply_mutation() directly.
 """
 
 from __future__ import annotations
@@ -64,7 +63,7 @@ class GateResponse(BaseModel):
 
 @app.post("/decide")
 def decide(req: DecideRequest) -> dict:
-    """Issue a signed decision record. For demo purposes."""
+    """Issue a signed decision record."""
     now = datetime.now(timezone.utc)
     expires = now + timedelta(seconds=req.expires_in_seconds)
 
@@ -84,9 +83,7 @@ def decide(req: DecideRequest) -> dict:
 def execute(req: ExecuteRequest) -> GateResponse:
     """
     Attempt a governed action.
-
-    If a decision record is provided, it is validated by the gate.
-    If no decision is provided, the gate blocks immediately.
+    Decision record required. Without one, gate blocks.
     """
     decision = None
     if req.decision is not None:
@@ -133,19 +130,19 @@ def execute(req: ExecuteRequest) -> GateResponse:
 
 @app.get("/state")
 def get_state() -> dict:
-    """Read current state. No gate required for reads."""
+    """Read current state."""
     return store.read()
 
 
 @app.get("/audit")
 def get_audit() -> list:
-    """Read the append-only audit log."""
+    """Read audit log."""
     return audit.read_all()
 
 
 @app.post("/reset")
 def reset() -> dict:
-    """Reset state and audit. For testing only."""
+    """Reset state, audit, nonces. Testing only."""
     store.reset()
     audit.clear()
     gate.reset_nonces()

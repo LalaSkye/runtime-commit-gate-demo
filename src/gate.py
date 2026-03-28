@@ -1,14 +1,8 @@
 """
-Commit Gate — the enforcement boundary.
+Commit Gate.
 
-This is the only path to mutation.
-Every check is fail-closed: if anything is wrong, the answer is no.
-
-Invariant:
-    No valid decision record -> no state mutation.
-
-The gate consumes the decision before mutation, not after.
-The gate is the lock. Everything else is furniture.
+Only path to mutation. Fail-closed.
+Invariant: no valid decision record -> no state mutation.
 """
 
 from __future__ import annotations
@@ -41,12 +35,8 @@ class GateResult:
 
 class CommitGate:
     """
-    The enforcement boundary.
-
-    - Validates decision records
-    - Consumes nonces (replay protection)
-    - Delegates to state store only on full pass
-    - Logs everything to audit
+    Validates decision records, consumes nonces,
+    delegates to state store on full pass, logs all attempts.
     """
 
     def __init__(self, store: StateStore, audit: AuditLog):
@@ -68,10 +58,8 @@ class CommitGate:
         params: Optional[Dict[str, Any]] = None,
     ) -> GateResult:
         """
-        Attempt a governed action.
-
-        This is the SINGLE entry point for all mutations.
-        The checks run in order. First failure stops evaluation.
+        Single entry point for mutations.
+        Checks run in order. First failure stops evaluation.
         """
 
         # ── CHECK 1: Decision record exists ──

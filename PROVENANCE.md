@@ -1,56 +1,42 @@
 # Provenance
 
-## Authorship
+## Author
 
-This repository was independently authored by **Ricky Dean Jones**.
+Ricky Dean Jones
+Os-Trilogy LMT
+github.com/LalaSkye
 
-- **Organisation:** Os-Trilogy LMT
-- **GitHub:** github.com/LalaSkye
-- **Date of first commit:** 2026-03-28
+First commit: 2026-03-28.
 
-## Identity Binding
+## Origin
 
-The author is the sole originator of all architecture, code, specifications,
-and documentation in this repository. No external framework, codebase, or
-third-party intellectual property was used in the design or implementation
-of this system.
+All architecture, code, and documentation in this repository is original work.
 
-## Architectural Lineage
+No external framework, codebase, or third-party IP was used.
 
-This repository implements a runtime commit boundary — a discrete,
-deterministic, fail-closed gate that enforces the invariant:
+## Design lineage
 
-**No valid decision record -> no state mutation.**
+This repo implements a commit gate: a fail-closed check
+that blocks state mutation unless a valid decision record is presented.
 
-The design lineage traces to the author's prior published work:
+Pre-execution checks are a general engineering pattern.
+This implementation is independent.
 
-| Repository | Created | Relationship |
-|---|---|---|
-| `LalaSkye/invariant-lock` | 2026-02-16 | Version-locked invariant enforcement |
-| `LalaSkye/stop-machine` | 2026-02-16 | Deterministic state controller |
-| `LalaSkye/constraint-workshop` | 2026-02-16 | Constraint primitives |
-| `LalaSkye/execution-boundary-lab` | 2026-02-18 | Gate interface and contamination cases |
-| `LalaSkye/start-here` | 2026-03-25 | Canonical governance demo |
+Prior repositories by the same author:
 
-All dates are GitHub-recorded creation timestamps (UTC), immutable and
-independently verifiable.
+| Repository | Created (UTC) |
+|---|---|
+| `invariant-lock` | 2026-02-16 |
+| `stop-machine` | 2026-02-16 |
+| `constraint-workshop` | 2026-02-16 |
+| `execution-boundary-lab` | 2026-02-18 |
+| `start-here` | 2026-03-25 |
 
-## Intellectual Property Declaration
-
-All content in this repository is original work.
-
-- No code was derived from, copied from, or based on any third-party
-  governance framework, architecture, or codebase.
-- No licensing agreement, collaboration binding, or IP transfer has been
-  entered into with any third party in relation to this work.
-- The architectural approach (discrete admissibility gates, fail-closed
-  evaluation, proof-carrying decision records) is structurally distinct
-  from continuous-dynamics, spectral, or manifold-based governance approaches.
+All dates are GitHub-recorded, immutable, independently verifiable.
 
 ## Copyright
 
-Copyright (c) 2026 Ricky Dean Jones / Os-Trilogy LMT. All rights reserved.
+Copyright (c) 2026 Ricky Dean Jones / Os-Trilogy LMT.
 
-The code in this repository is released under the MIT licence.
-The authorship, provenance, and IP declarations in this document are
-asserted regardless of licence terms.
+Code: MIT licence.
+Authorship asserted regardless of licence terms.

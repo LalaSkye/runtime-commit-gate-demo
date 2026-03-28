@@ -1,91 +1,78 @@
 # runtime-commit-gate-demo
 
-This repo demonstrates a runtime commit boundary for governed actions.
-
-**Invariant:**
+Invariant:
 No valid decision record -> no state mutation.
 
-The system includes:
-- A decision record contract (signed, scoped, time-bound)
-- A commit gate (the only path to mutation)
-- Append-only audit log
-- Replay protection
-- Conformance tests that try to cheat the gate
-
-## Quick Start
+## Run
 
 ```bash
-git clone https://github.com/LalaSkye/runtime-commit-gate-demo.git
-cd runtime-commit-gate-demo
 pip install -r requirements.txt
 python demo/run_demo.py
 ```
 
-## What It Proves
-
-Five attempts. One allowed. Four blocked.
-
-| Step | Attempt | Result | Reason |
-|---|---|---|---|
-| 1 | `delete_env` with no decision | BLOCKED | `NO_DECISION_RECORD` |
-| 2 | `delete_env` with valid decision | ALLOWED | `ALL_CHECKS_PASSED` |
-| 3 | Replay same decision | BLOCKED | `NONCE_REPLAYED` |
-| 4 | Decision for `env_1`, target `env_2` | BLOCKED | `OBJECT_MISMATCH` |
-| 5 | Expired decision | BLOCKED | `DECISION_EXPIRED` |
-
-## Run Tests
+## Tests
 
 ```bash
 python -m pytest tests/ -v
 ```
 
-## Architecture
+13 tests. All passing.
 
-```
-client request
-  -> decision validator
-  -> commit gate
-  -> mutation handler
-  -> state store
-  -> append-only audit log
-```
+## What it does
 
-The mutation handler cannot be called directly. Every mutation passes through the gate.
+Three governed actions. One gate. No bypass.
 
-## Governed Actions
-
-Three actions. Closed set. Nothing else is accepted.
-
-| Action | Object | Effect |
+| Action | Object | Mutation |
 |---|---|---|
-| `approve_invoice` | Invoice ID | Sets status to approved |
-| `change_limit` | Account ID | Updates daily limit |
-| `delete_env` | Environment ID | Marks environment as deleted |
+| `approve_invoice` | Invoice ID | status -> approved |
+| `change_limit` | Account ID | daily_limit updated |
+| `delete_env` | Environment ID | deleted -> true |
 
-## Gate Checks
+## Proof sequence
 
-Ten checks, evaluated in order. First failure blocks.
+| Step | Input | Result | Reason |
+|---|---|---|---|
+| 1 | No decision | BLOCKED | `NO_DECISION_RECORD` |
+| 2 | Valid decision | ALLOWED | `ALL_CHECKS_PASSED` |
+| 3 | Replay same decision | BLOCKED | `NONCE_REPLAYED` |
+| 4 | Decision(env_1), request(env_2) | BLOCKED | `OBJECT_MISMATCH` |
+| 5 | Expired decision | BLOCKED | `DECISION_EXPIRED` |
 
-1. Decision record exists
-2. Verdict is ALLOW
-3. Signature valid (HMAC-SHA256)
-4. Not expired
-5. Nonce not replayed
-6. Action matches request
-7. Object matches request
-8. Environment matches request
-9. Policy version accepted
-10. Action is governed
+## Gate checks
+
+Ten checks. Evaluation order. First failure stops.
+
+| # | Check | Failure code |
+|---|---|---|
+| 1 | Decision record exists | `NO_DECISION_RECORD` |
+| 2 | verdict == ALLOW | `VERDICT_NOT_ALLOW` |
+| 3 | HMAC-SHA256 signature valid | `INVALID_SIGNATURE` |
+| 4 | expires_at > now | `DECISION_EXPIRED` |
+| 5 | Nonce unused | `NONCE_REPLAYED` |
+| 6 | action matches request | `ACTION_MISMATCH` |
+| 7 | object_id matches request | `OBJECT_MISMATCH` |
+| 8 | environment matches request | `ENVIRONMENT_MISMATCH` |
+| 9 | policy_version in accepted set | `POLICY_VERSION_REJECTED` |
+| 10 | action in governed set | `UNKNOWN_ACTION` |
+
+## Flow
+
+```
+request -> gate -> [10 checks] -> mutation -> state store
+                                -> audit log (append-only)
+```
+
+If any check fails: no mutation, reason logged.
 
 ## Files
 
 ```
 src/
-  decision_record.py   — the licence contract
-  gate.py              — the enforcement boundary
-  state_store.py       — the thing that changes (or doesn't)
-  audit.py             — append-only proof
-  server.py            — FastAPI endpoints
+  decision_record.py   decision contract + HMAC signing
+  gate.py              10-check gate, fail-closed
+  state_store.py       JSON-backed, 3 objects
+  audit.py             append-only JSONL
+  server.py            FastAPI (optional)
 
 tests/
   test_no_decision_blocks.py
@@ -95,55 +82,30 @@ tests/
   test_valid_decision_allows.py
   test_invalid_signature_blocks.py
 
-docs/
-  decision_record_spec.md
-  commit_gate_rules.md
-
 demo/
-  run_demo.py          — 5-step proof sequence
-  run_demo.sh          — full demo + test run
+  run_demo.py          5-step proof
 ```
 
-## API (Optional)
-
-Start the server:
+## API (optional)
 
 ```bash
 uvicorn src.server:app --reload
 ```
 
-| Method | Endpoint | Purpose |
+| Method | Endpoint | Returns |
 |---|---|---|
-| `POST` | `/decide` | Issue a signed decision record |
-| `POST` | `/execute` | Attempt a governed action |
-| `GET` | `/state` | Read current state |
-| `GET` | `/audit` | Read audit log |
+| POST | `/decide` | signed decision record |
+| POST | `/execute` | gate result (ALLOWED/BLOCKED + reason) |
+| GET | `/state` | current state |
+| GET | `/audit` | all gate attempts |
 
 ## Docs
 
-- [Decision Record Spec](docs/decision_record_spec.md)
-- [Commit Gate Rules](docs/commit_gate_rules.md)
+- [Decision record spec](docs/decision_record_spec.md)
+- [Gate rules](docs/commit_gate_rules.md)
 
 ## Licence
 
-MIT
+MIT. Copyright (c) 2026 Ricky Dean Jones / Os-Trilogy LMT.
 
-## Author
-
-Ricky Dean Jones
-Os-Trilogy LMT
-
----
-
-**Authorship & Rights**
-
-All architecture, code, specifications, and documentation in this repository
-are the original work of Ricky Dean Jones / Os-Trilogy LMT.
-
-No external framework, codebase, or third-party intellectual property was
-used in the design or implementation of this system.
-
-See [PROVENANCE.md](PROVENANCE.md) for full authorship and IP declaration.
-
-Copyright (c) 2026 Ricky Dean Jones / Os-Trilogy LMT. All rights reserved.
-Code released under MIT licence. Authorship asserted regardless of licence terms.
+See [PROVENANCE.md](PROVENANCE.md).

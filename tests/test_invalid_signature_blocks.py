@@ -1,7 +1,5 @@
 """
-TEST: Invalid signature -> no state mutation.
-
-A tampered or forged decision record is worthless.
+Invalid signature -> no state mutation.
 """
 
 from datetime import datetime, timezone, timedelta
@@ -9,7 +7,7 @@ from src.decision_record import DecisionRecord
 
 
 def test_invalid_signature_blocks(gate, store):
-    """Decision with bad signature. Must be blocked."""
+    """Bad signature -> BLOCKED."""
     state_before = store.snapshot()
     now = datetime.now(timezone.utc)
 
@@ -42,7 +40,7 @@ def test_invalid_signature_blocks(gate, store):
 
 
 def test_deny_verdict_blocks(gate, store):
-    """Decision with verdict=DENY. Must be blocked even if signed."""
+    """verdict=DENY -> BLOCKED (even if signed)."""
     from src.decision_record import make_record
 
     state_before = store.snapshot()

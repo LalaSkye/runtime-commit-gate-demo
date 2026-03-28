@@ -1,12 +1,10 @@
 """
-TEST: No decision record -> no state mutation.
-
-This is the core invariant. If this fails, nothing else matters.
+No decision record -> no state mutation.
 """
 
 
 def test_no_decision_blocks_delete_env(gate, store):
-    """Attempt delete_env with no decision. Must be blocked."""
+    """No decision + delete_env -> BLOCKED."""
     state_before = store.snapshot()
 
     result = gate.execute(
@@ -23,7 +21,7 @@ def test_no_decision_blocks_delete_env(gate, store):
 
 
 def test_no_decision_blocks_approve_invoice(gate, store):
-    """Attempt approve_invoice with no decision. Must be blocked."""
+    """No decision + approve_invoice -> BLOCKED."""
     state_before = store.snapshot()
 
     result = gate.execute(
@@ -40,7 +38,7 @@ def test_no_decision_blocks_approve_invoice(gate, store):
 
 
 def test_no_decision_blocks_change_limit(gate, store):
-    """Attempt change_limit with no decision. Must be blocked."""
+    """No decision + change_limit -> BLOCKED."""
     state_before = store.snapshot()
 
     result = gate.execute(

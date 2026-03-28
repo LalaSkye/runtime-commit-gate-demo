@@ -1,8 +1,7 @@
 """
-Decision Record — the licence that governs mutation.
+Decision Record.
 
-A decision record is a signed, scoped, time-bound authorisation.
-Without one, no state change occurs. Period.
+Signed, scoped, time-bound. Required for any state mutation.
 """
 
 from __future__ import annotations
@@ -16,14 +15,13 @@ from datetime import datetime, timezone
 from typing import List, Optional
 
 
-# Shared secret for HMAC signing. In production this lives in a vault.
-# For this demo it proves the mechanism, not the key management.
+# HMAC secret. In production, stored in a vault.
 DEFAULT_SECRET = b"commit-gate-demo-secret-v0"
 
 
 @dataclass(frozen=True)
 class DecisionRecord:
-    """Immutable licence for a single governed action."""
+    """Immutable. Fields fixed at construction."""
 
     decision_id: str
     actor_id: str
@@ -111,7 +109,7 @@ def make_record(
     nonce: Optional[str] = None,
     secret: bytes = DEFAULT_SECRET,
 ) -> DecisionRecord:
-    """Convenience: build and sign a decision record in one call."""
+    """Build and sign a decision record."""
     now = datetime.now(timezone.utc)
     rec = DecisionRecord(
         decision_id=f"dr_{uuid.uuid4().hex[:12]}",

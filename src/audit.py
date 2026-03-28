@@ -1,9 +1,8 @@
 """
-Audit Log — append-only record of every attempt.
+Audit Log.
 
-Every request that reaches the gate gets logged.
-Successes and failures alike. No deletion. No editing.
-The log is the proof.
+Append-only. Every gate attempt logged.
+No deletion. No editing.
 """
 
 from __future__ import annotations

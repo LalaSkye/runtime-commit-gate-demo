@@ -1,13 +1,11 @@
 """
-TEST: Replayed decision -> no state mutation.
-
-A decision record is single-use. Once consumed, the nonce is burned.
-Using it again is replay. Replay is blocked.
+Replayed decision -> no state mutation.
+Nonce is single-use. Second use is BLOCKED.
 """
 
 
 def test_replay_blocks(gate, store, valid_decision):
-    """Use a decision once (pass), then replay it (must block)."""
+    """First use -> ALLOWED. Same nonce again -> BLOCKED."""
 
     # First use: should pass
     result1 = gate.execute(

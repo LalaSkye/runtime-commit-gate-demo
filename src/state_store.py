@@ -1,9 +1,8 @@
 """
-State Store — the thing that changes (or doesn't).
+State Store.
 
-A tiny JSON-backed store with three governed objects.
-The only way to mutate it is through the commit gate.
-There is no backdoor. There is no direct write method.
+JSON-backed. Three governed objects.
+Mutations only via apply_mutation().
 """
 
 from __future__ import annotations
@@ -31,7 +30,7 @@ INITIAL_STATE = {
 
 
 class StateStore:
-    """JSON-backed state. Read freely. Write only via apply_mutation()."""
+    """Read freely. Write only via apply_mutation()."""
 
     def __init__(self, path: Optional[Path] = None):
         self._path = path or DEFAULT_STATE_PATH
@@ -53,12 +52,8 @@ class StateStore:
 
     def apply_mutation(self, action: str, object_id: str, actor_id: str, params: Optional[Dict[str, Any]] = None) -> dict:
         """
-        Apply a governed mutation. This is the ONLY write path.
-
-        IMPORTANT: This method must ONLY be called by the commit gate
-        after all validation passes. Calling it directly bypasses governance.
-        In a production system this would be enforced by module encapsulation.
-        Here we enforce it by architecture: server.py never calls this directly.
+        Apply mutation. Called by commit gate after all checks pass.
+        server.py never calls this directly.
         """
         state = self.read()
         params = params or {}

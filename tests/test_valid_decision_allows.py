@@ -1,7 +1,6 @@
 """
-TEST: Valid decision record -> action executes.
-
-The happy path. All checks pass. State mutates. Audit records it.
+Valid decision record -> action executes.
+All checks pass. State mutates. Audit records it.
 """
 
 from datetime import datetime, timezone, timedelta
@@ -9,7 +8,7 @@ from src.decision_record import make_record
 
 
 def test_valid_decision_allows_delete_env(gate, store, audit_log, valid_decision):
-    """Valid decision for delete_env/env_1/prod. Must execute."""
+    """Valid decision + delete_env/env_1/prod -> ALLOWED."""
     state_before = store.snapshot()
     assert state_before["environments"]["env_1"]["deleted"] is False
 
@@ -37,7 +36,7 @@ def test_valid_decision_allows_delete_env(gate, store, audit_log, valid_decision
 
 
 def test_valid_decision_allows_approve_invoice(gate, store, audit_log):
-    """Valid decision for approve_invoice/inv_001/prod. Must execute."""
+    """Valid decision + approve_invoice/inv_001/prod -> ALLOWED."""
     now = datetime.now(timezone.utc)
     decision = make_record(
         actor_id="user_456",
@@ -63,7 +62,7 @@ def test_valid_decision_allows_approve_invoice(gate, store, audit_log):
 
 
 def test_valid_decision_allows_change_limit(gate, store, audit_log):
-    """Valid decision for change_limit/acct_778/prod. Must execute."""
+    """Valid decision + change_limit/acct_778/prod -> ALLOWED."""
     now = datetime.now(timezone.utc)
     decision = make_record(
         actor_id="user_789",

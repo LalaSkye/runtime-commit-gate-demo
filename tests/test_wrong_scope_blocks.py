@@ -1,9 +1,6 @@
 """
-TEST: Wrong scope -> no state mutation.
-
-A decision scoped to object A cannot authorise mutation of object B.
-A decision scoped to environment X cannot authorise mutation in environment Y.
-A decision scoped to action P cannot authorise action Q.
+Wrong scope -> no state mutation.
+Object, environment, and action must match.
 """
 
 from datetime import datetime, timezone, timedelta
@@ -11,7 +8,7 @@ from src.decision_record import make_record
 
 
 def test_wrong_object_blocks(gate, store):
-    """Decision for env_1, request targets env_2. Must be blocked."""
+    """Decision(env_1) + request(env_2) -> BLOCKED."""
     state_before = store.snapshot()
     now = datetime.now(timezone.utc)
 
@@ -38,7 +35,7 @@ def test_wrong_object_blocks(gate, store):
 
 
 def test_wrong_environment_blocks(gate, store):
-    """Decision for prod, request targets staging. Must be blocked."""
+    """Decision(prod) + request(staging) -> BLOCKED."""
     state_before = store.snapshot()
     now = datetime.now(timezone.utc)
 
@@ -65,7 +62,7 @@ def test_wrong_environment_blocks(gate, store):
 
 
 def test_wrong_action_blocks(gate, store):
-    """Decision for delete_env, request attempts change_limit. Must be blocked."""
+    """Decision(delete_env) + request(change_limit) -> BLOCKED."""
     state_before = store.snapshot()
     now = datetime.now(timezone.utc)
 

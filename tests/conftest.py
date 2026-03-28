@@ -1,8 +1,5 @@
 """
-Shared fixtures for conformance tests.
-
-Every test gets a fresh gate, store, and audit log.
-No state bleeds between tests.
+Shared fixtures. Fresh gate, store, audit per test.
 """
 
 import pytest
