@@ -1,42 +1,50 @@
-# Provenance
+# Provenance & Independent Design Statement
 
-## Author
+Author: Ricky Dean Jones / Os-Trilogy LMT
+Date: 2026-03-28
 
-Ricky Dean Jones
-Os-Trilogy LMT
-github.com/LalaSkye
+## Statement
 
-First commit: 2026-03-28.
+This repository is an original implementation of a runtime execution boundary.
 
-## Origin
+It was developed independently using general software engineering principles:
 
-All architecture, code, and documentation in this repository is original work.
+- input validation
+- state transition control
+- cryptographic signing (HMAC)
+- replay protection (nonces)
+- expiry / freshness checks
+- append-only audit logs
 
-No external framework, codebase, or third-party IP was used.
+No external proprietary materials, codebases, or confidential specifications were used.
 
-## Design lineage
+## Scope of originality
 
-This repo implements a commit gate: a fail-closed check
-that blocks state mutation unless a valid decision record is presented.
+This repository implements:
 
-Pre-execution checks are a general engineering pattern.
-This implementation is independent.
+- a decision record contract
+- a commit gate enforcing deterministic checks
+- a mutation path that is unreachable without a valid record
+- conformance tests proving fail-closed behaviour
 
-Prior repositories by the same author:
+## Non-claims
 
-| Repository | Created (UTC) |
-|---|---|
-| `invariant-lock` | 2026-02-16 |
-| `stop-machine` | 2026-02-16 |
-| `constraint-workshop` | 2026-02-16 |
-| `execution-boundary-lab` | 2026-02-18 |
-| `start-here` | 2026-03-25 |
+This repository does not claim ownership of:
 
-All dates are GitHub-recorded, immutable, independently verifiable.
+- general concepts such as pre-execution validation or authorization checks
+- standard security or software patterns
 
-## Copyright
+## Evidence of independence
 
-Copyright (c) 2026 Ricky Dean Jones / Os-Trilogy LMT.
+- Public git history with timestamps
+- Multiple related repositories predating external interactions
+- Distinct terminology and implementation structure
+- No shared code or licensed material
 
-Code: MIT licence.
-Authorship asserted regardless of licence terms.
+## Contact
+
+For questions regarding authorship or licensing, contact via repository issues.
+
+## Licence
+
+MIT (see LICENSE).

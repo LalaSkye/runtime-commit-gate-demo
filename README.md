@@ -1,90 +1,66 @@
 # runtime-commit-gate-demo
 
-Invariant:
+**Invariant:**
 No valid decision record -> no state mutation.
+
+## What this repo shows
+
+A minimal execution boundary for governed actions.
+
+- Deterministic checks
+- Fail-closed behaviour
+- Replay resistance
+- Scope binding
+- Append-only audit
+
+No policy engine. No AI. No narrative.
 
 ## Run
 
 ```bash
-pip install -r requirements.txt
 python demo/run_demo.py
 ```
 
-## Tests
+Expected:
 
-```bash
-python -m pytest tests/ -v
+1. No decision -> BLOCKED
+2. Valid decision -> ALLOWED
+3. Replay same decision -> BLOCKED
+4. Wrong object -> BLOCKED
+5. Expired decision -> BLOCKED
+
+## Decision record (input contract)
+
+```json
+{
+  "decision_id": "dr_001",
+  "actor_id": "user_123",
+  "action": "delete_env",
+  "object_id": "env_1",
+  "environment": "prod",
+  "verdict": "ALLOW",
+  "policy_version": "2026-03-28.1",
+  "issued_at": "2026-03-28T18:00:00Z",
+  "expires_at": "2026-03-28T18:05:00Z",
+  "nonce": "abc123xyz",
+  "signature": "HMAC-SHA256(...)"
+}
 ```
 
-13 tests. All passing.
+## Gate checks (evaluation order)
 
-## What it does
+1. record exists
+2. verdict == ALLOW
+3. signature valid
+4. not expired
+5. nonce unused
+6. action matches
+7. object matches
+8. environment matches
+9. policy version accepted
+10. action is governed
 
-Three governed actions. One gate. No bypass.
-
-| Action | Object | Mutation |
-|---|---|---|
-| `approve_invoice` | Invoice ID | status -> approved |
-| `change_limit` | Account ID | daily_limit updated |
-| `delete_env` | Environment ID | deleted -> true |
-
-## Proof sequence
-
-| Step | Input | Result | Reason |
-|---|---|---|---|
-| 1 | No decision | BLOCKED | `NO_DECISION_RECORD` |
-| 2 | Valid decision | ALLOWED | `ALL_CHECKS_PASSED` |
-| 3 | Replay same decision | BLOCKED | `NONCE_REPLAYED` |
-| 4 | Decision(env_1), request(env_2) | BLOCKED | `OBJECT_MISMATCH` |
-| 5 | Expired decision | BLOCKED | `DECISION_EXPIRED` |
-
-## Gate checks
-
-Ten checks. Evaluation order. First failure stops.
-
-| # | Check | Failure code |
-|---|---|---|
-| 1 | Decision record exists | `NO_DECISION_RECORD` |
-| 2 | verdict == ALLOW | `VERDICT_NOT_ALLOW` |
-| 3 | HMAC-SHA256 signature valid | `INVALID_SIGNATURE` |
-| 4 | expires_at > now | `DECISION_EXPIRED` |
-| 5 | Nonce unused | `NONCE_REPLAYED` |
-| 6 | action matches request | `ACTION_MISMATCH` |
-| 7 | object_id matches request | `OBJECT_MISMATCH` |
-| 8 | environment matches request | `ENVIRONMENT_MISMATCH` |
-| 9 | policy_version in accepted set | `POLICY_VERSION_REJECTED` |
-| 10 | action in governed set | `UNKNOWN_ACTION` |
-
-## Flow
-
-```
-request -> gate -> [10 checks] -> mutation -> state store
-                                -> audit log (append-only)
-```
-
-If any check fails: no mutation, reason logged.
-
-## Files
-
-```
-src/
-  decision_record.py   decision contract + HMAC signing
-  gate.py              10-check gate, fail-closed
-  state_store.py       JSON-backed, 3 objects
-  audit.py             append-only JSONL
-  server.py            FastAPI (optional)
-
-tests/
-  test_no_decision_blocks.py
-  test_expired_decision_blocks.py
-  test_wrong_scope_blocks.py
-  test_replay_blocks.py
-  test_valid_decision_allows.py
-  test_invalid_signature_blocks.py
-
-demo/
-  run_demo.py          5-step proof
-```
+First failure -> stop.
 
 ## API (optional)
 
@@ -94,18 +70,43 @@ uvicorn src.server:app --reload
 
 | Method | Endpoint | Returns |
 |---|---|---|
-| POST | `/decide` | signed decision record |
-| POST | `/execute` | gate result (ALLOWED/BLOCKED + reason) |
+| POST | `/decide` | decision record |
+| POST | `/execute` | gate result |
 | GET | `/state` | current state |
-| GET | `/audit` | all gate attempts |
+| GET | `/audit` | append-only log |
+
+## Files
+
+```
+src/decision_record.py   input contract + signing
+src/gate.py              enforcement boundary
+src/state_store.py       mutation target
+src/audit.py             append-only log
+tests/                   conformance tests
+demo/run_demo.py         proof sequence
+```
+
+## Tests
+
+```bash
+python -m pytest tests/ -v
+```
+
+13 tests covering: missing record, expired record, replayed nonce, scope mismatch, invalid signature, DENY verdict, valid path (3 actions).
 
 ## Docs
 
 - [Decision record spec](docs/decision_record_spec.md)
 - [Gate rules](docs/commit_gate_rules.md)
 
-## Licence
-
-MIT. Copyright (c) 2026 Ricky Dean Jones / Os-Trilogy LMT.
+## Provenance
 
 See [PROVENANCE.md](PROVENANCE.md).
+
+## Licence
+
+MIT — see [LICENSE](LICENSE).
+
+---
+
+This repository demonstrates a deterministic control boundary using standard engineering techniques. No proprietary frameworks or external implementations are used.
