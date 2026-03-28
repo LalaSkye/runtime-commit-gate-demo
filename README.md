@@ -132,3 +132,18 @@ MIT
 
 Ricky Dean Jones
 Os-Trilogy LMT
+
+---
+
+**Authorship & Rights**
+
+All architecture, code, specifications, and documentation in this repository
+are the original work of Ricky Dean Jones / Os-Trilogy LMT.
+
+No external framework, codebase, or third-party intellectual property was
+used in the design or implementation of this system.
+
+See [PROVENANCE.md](PROVENANCE.md) for full authorship and IP declaration.
+
+Copyright (c) 2026 Ricky Dean Jones / Os-Trilogy LMT. All rights reserved.
+Code released under MIT licence. Authorship asserted regardless of licence terms.
