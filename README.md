@@ -94,10 +94,45 @@ python -m pytest tests/ -v
 
 13 tests covering: missing record, expired record, replayed nonce, scope mismatch, invalid signature, DENY verdict, valid path (3 actions).
 
+## Modify the system
+
+This repository is intentionally small enough to change.
+
+Try one modification:
+
+1. Open `src/gate.py`
+2. Remove the expiry check (CHECK 4)
+3. Run:
+
+```bash
+python demo/run_demo.py
+python -m pytest tests/ -v
+```
+
+Expected: expired decisions will no longer be blocked. The invariant is violated.
+
+Restore the check to re-enforce the invariant.
+
+### Extension path
+
+Fork the repository and modify the decision checks.
+
+Suggested extensions:
+
+- Add a new governed action
+- Require two approvals before ALLOW
+- Add dependency checks between actions
+- Add pre-state verification
+
+Controlled challenges: [docs/challenges.md](docs/challenges.md)
+
+Editable payloads: [examples/](examples/)
+
 ## Docs
 
 - [Decision record spec](docs/decision_record_spec.md)
 - [Gate rules](docs/commit_gate_rules.md)
+- [Challenges](docs/challenges.md)
 
 ## Provenance
 

@@ -195,6 +195,8 @@ class CommitGate:
             self._log(result, actor_id, environment, decision.decision_id)
             return result
 
+        # Extension point: add further checks here before mutation.
+
         # ── ALL CHECKS PASSED — consume nonce and mutate ──
         self._used_nonces.add(decision.nonce)
 
