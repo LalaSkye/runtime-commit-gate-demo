@@ -27,7 +27,7 @@ from .state_store import StateStore
 
 store = StateStore()
 audit = AuditLog()
-gate = CommitGate(store, audit)
+gate = CommitGate(store, audit, nonce_ledger_path="var/nonces.jsonl")
 app = FastAPI(title="Runtime Commit Gate Demo", version="0.1.0")
 
 
