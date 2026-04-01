@@ -18,6 +18,7 @@ def tmp_paths(tmp_path):
     return {
         "state": tmp_path / "state.json",
         "audit": tmp_path / "audit.jsonl",
+        "nonces": tmp_path / "nonces.jsonl",
     }
 
 
@@ -32,8 +33,8 @@ def audit_log(tmp_paths):
 
 
 @pytest.fixture
-def gate(store, audit_log):
-    return CommitGate(store, audit_log)
+def gate(store, audit_log, tmp_paths):
+    return CommitGate(store, audit_log, nonce_ledger_path=tmp_paths["nonces"])
 
 
 @pytest.fixture

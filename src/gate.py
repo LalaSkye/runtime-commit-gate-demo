@@ -7,12 +7,14 @@ Invariant: no valid decision record -> no state mutation.
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional, Set
+from typing import Any, Dict, Optional
 
 from .audit import AuditLog
 from .decision_record import DecisionRecord, verify_signature
+from .nonce_ledger import NonceLedger
 from .state_store import StateStore
 
 
@@ -39,14 +41,14 @@ class CommitGate:
     delegates to state store on full pass, logs all attempts.
     """
 
-    def __init__(self, store: StateStore, audit: AuditLog):
+    def __init__(self, store: StateStore, audit: AuditLog, nonce_ledger_path: str | os.PathLike[str] = "var/nonces.jsonl"):
         self._store = store
         self._audit = audit
-        self._used_nonces: Set[str] = set()
+        self._nonce_ledger = NonceLedger(nonce_ledger_path)
 
     def reset_nonces(self) -> None:
         """Clear nonce registry. For testing only."""
-        self._used_nonces.clear()
+        self._nonce_ledger.clear()
 
     def execute(
         self,
@@ -124,7 +126,7 @@ class CommitGate:
             return result
 
         # ── CHECK 5: Nonce not replayed ──
-        if decision.nonce in self._used_nonces:
+        if self._nonce_ledger.seen(decision.nonce):
             result = GateResult(
                 allowed=False,
                 reason="NONCE_REPLAYED",
@@ -197,9 +199,7 @@ class CommitGate:
 
         # Extension point: add further checks here before mutation.
 
-        # ── ALL CHECKS PASSED — consume nonce and mutate ──
-        self._used_nonces.add(decision.nonce)
-
+        # ── ALL CHECKS PASSED — mutate then consume nonce ──
         try:
             self._store.apply_mutation(action, object_id, actor_id, params)
         except Exception as e:
@@ -212,6 +212,8 @@ class CommitGate:
             )
             self._log(result, actor_id, environment, decision.decision_id)
             return result
+
+        self._nonce_ledger.consume(decision.nonce)
 
         result = GateResult(
             allowed=True,

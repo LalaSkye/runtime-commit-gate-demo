@@ -8,3 +8,4 @@ demo/demo_data/
 dist/
 build/
 .env
+var/
