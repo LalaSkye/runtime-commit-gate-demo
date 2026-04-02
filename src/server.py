@@ -1,11 +1,12 @@
 """
-Server. Four endpoints, one gate.
+Server. Four endpoints, one gate, one entry guard.
 
 POST /decide  - issue a signed decision record
-POST /execute - attempt a governed action through the gate
+POST /execute - attempt a governed action through entry guard then gate
 GET  /state   - read current state
 GET  /audit   - read append-only audit log
 
+Pipeline: entry guard -> commit gate -> mutation -> state store
 server.py never calls state_store.apply_mutation() directly.
 """
 
@@ -19,19 +20,20 @@ from pydantic import BaseModel
 
 from .audit import AuditLog
 from .decision_record import DecisionRecord, make_record, sign_record
+from .entry_guard import validate_entry, GuardResult
 from .gate import CommitGate, GateResult
 from .state_store import StateStore
 
 
-# ── Initialise components ──
+# -- Initialise components --
 
 store = StateStore()
 audit = AuditLog()
 gate = CommitGate(store, audit)
-app = FastAPI(title="Runtime Commit Gate Demo", version="0.1.0")
+app = FastAPI(title="Runtime Commit Gate Demo", version="0.2.0")
 
 
-# ── Request / Response models ──
+# -- Request / Response models --
 
 class DecideRequest(BaseModel):
     actor_id: str
@@ -49,6 +51,7 @@ class ExecuteRequest(BaseModel):
     actor_id: str
     decision: Optional[Dict[str, Any]] = None
     params: Optional[Dict[str, Any]] = None
+    entry_condition: Optional[Dict[str, Any]] = None
 
 
 class GateResponse(BaseModel):
@@ -59,7 +62,7 @@ class GateResponse(BaseModel):
     object_id: Optional[str] = None
 
 
-# ── Endpoints ──
+# -- Endpoints --
 
 @app.post("/decide")
 def decide(req: DecideRequest) -> dict:
@@ -83,8 +86,31 @@ def decide(req: DecideRequest) -> dict:
 def execute(req: ExecuteRequest) -> GateResponse:
     """
     Attempt a governed action.
-    Decision record required. Without one, gate blocks.
+
+    Pipeline:
+    1. Entry guard (if entry_condition present) - validates condition structure
+    2. Commit gate - validates decision record
+    3. Mutation - applies state change
+
+    Entry guard failure -> HOLD. Request never reaches the gate.
     """
+
+    # -- LAYER 1: Entry guard --
+    if req.entry_condition is not None:
+        packet = {
+            "action": req.action,
+            **req.entry_condition,
+        }
+        guard_result = validate_entry(packet)
+        if not guard_result.passed:
+            return GateResponse(
+                allowed=False,
+                reason=f"ENTRY_GUARD_HOLD:{guard_result.failed_check}:{guard_result.reason}",
+                action=req.action,
+                object_id=req.object_id,
+            )
+
+    # -- LAYER 2: Commit gate --
     decision = None
     if req.decision is not None:
         try:

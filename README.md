@@ -7,7 +7,8 @@ No valid decision record -> no state mutation.
 
 A minimal execution boundary for governed actions.
 
-- Deterministic checks
+- Entry condition guard (condition structure validation)
+- Deterministic commit gate (10 checks, first-fail)
 - Fail-closed behaviour
 - Replay resistance
 - Scope binding
@@ -47,6 +48,28 @@ Expected:
 }
 ```
 
+## Pipeline
+
+```
+request -> entry guard -> commit gate -> mutation -> state store
+```
+
+Entry guard validates condition structure. Commit gate validates decision record.
+Both must pass. Neither trusts the other.
+
+## Entry guard checks
+
+If `entry_condition` is present on the request:
+
+1. condition present and non-empty
+2. test is machine-checkable (not prose)
+3. binding links condition to execution (`on_false` == `hold`)
+4. evaluation context variables declared
+
+First failure -> HOLD. Request never reaches the gate.
+
+See [entry guard spec](docs/entry_guard_spec.md).
+
 ## Gate checks (evaluation order)
 
 1. record exists
@@ -78,11 +101,13 @@ uvicorn src.server:app --reload
 ## Files
 
 ```
+src/entry_guard.py       condition structure validation (Layer 1)
+src/gate.py              commit gate — enforcement boundary (Layer 2)
 src/decision_record.py   input contract + signing
-src/gate.py              enforcement boundary
+src/server.py            API — wires entry guard before gate
 src/state_store.py       mutation target
 src/audit.py             append-only log
-tests/                   conformance tests
+tests/                   conformance + integration tests
 demo/run_demo.py         proof sequence
 ```
 
@@ -92,7 +117,7 @@ demo/run_demo.py         proof sequence
 python -m pytest tests/ -v
 ```
 
-13 tests covering: missing record, expired record, replayed nonce, scope mismatch, invalid signature, DENY verdict, valid path (3 actions).
+42 tests covering: entry guard wiring (6 integration), entry guard unit (13), commit gate adversarial (9), replay, scope mismatch, expiry, signature, valid paths (3 actions). 1 xfail (deferred double-approval).
 
 ## Modify the system
 
@@ -130,6 +155,7 @@ Editable payloads: [examples/](examples/)
 
 ## Docs
 
+- [Entry guard spec](docs/entry_guard_spec.md)
 - [Decision record spec](docs/decision_record_spec.md)
 - [Gate rules](docs/commit_gate_rules.md)
 - [Challenges](docs/challenges.md)
