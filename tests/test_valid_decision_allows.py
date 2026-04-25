@@ -4,7 +4,7 @@ All checks pass. State mutates. Audit records it.
 """
 
 from datetime import datetime, timezone, timedelta
-from src.decision_record import make_record
+from src.decision_record import make_record, make_record_with_params_hash
 
 
 def test_valid_decision_allows_delete_env(gate, store, audit_log, valid_decision):
@@ -62,13 +62,23 @@ def test_valid_decision_allows_approve_invoice(gate, store, audit_log):
 
 
 def test_valid_decision_allows_change_limit(gate, store, audit_log):
-    """Valid decision + change_limit/acct_778/prod -> ALLOWED."""
+    """Valid decision + change_limit/acct_778/prod -> ALLOWED.
+
+    V4 adjustment (recorded in RESULTS_v4.md, FINDING_D-PRE):
+    change_limit now requires V4 parameter binding because it passes
+    params through to state_store. Previously this test used the legacy
+    `make_record()` + caller-supplied params path, which is exactly the
+    V4 gap. Adjusted to use `make_record_with_params_hash()` (Mode A).
+    The previous version is preserved in the git history for audit.
+    """
     now = datetime.now(timezone.utc)
-    decision = make_record(
+    params = {"new_limit": 50000.00}
+    decision = make_record_with_params_hash(
         actor_id="user_789",
         action="change_limit",
         object_id="acct_778",
         environment="prod",
+        params=params,
         issued_at=now.isoformat(),
         expires_at=(now + timedelta(minutes=5)).isoformat(),
     )
@@ -79,7 +89,7 @@ def test_valid_decision_allows_change_limit(gate, store, audit_log):
         environment="prod",
         actor_id="user_789",
         decision=decision,
-        params={"new_limit": 50000.00},
+        params=params,
     )
 
     assert result.allowed is True

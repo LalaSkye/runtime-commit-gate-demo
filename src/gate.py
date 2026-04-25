@@ -34,7 +34,12 @@ ACCEPTED_POLICY_VERSIONS = frozenset({"2026-03-28.1"})
 # V4: actions that legitimately take no params. Records with both
 # params_hash=None and params=None are accepted only for these actions
 # (legacy unbound mode). All other governed actions require V4 binding.
-PARAMETERLESS_ACTIONS = frozenset({"delete_env"})
+# Note: approve_invoice was added to this set as part of V4 finding
+# D-PRE (see RESULTS_v4.md). The state_store.apply_mutation for
+# approve_invoice does not consult params, so it is functionally
+# parameterless. The pre-registration omitted it; this is a recorded
+# pre-reg incompleteness, not a silent change.
+PARAMETERLESS_ACTIONS = frozenset({"delete_env", "approve_invoice"})
 
 
 @dataclass(frozen=True)
