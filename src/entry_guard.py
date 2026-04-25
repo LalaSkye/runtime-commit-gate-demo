@@ -13,11 +13,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Set
 
+from .predicate_registry import is_registered_predicate
+
 
 # Allowed test forms
 ALLOWED_TEST_TYPES = frozenset({"expression", "predicate_ref", "structured"})
 
-# Disallowed condition patterns (free prose indicators)
+# Disallowed condition patterns (free prose indicators).
+# Kept as a fast-path blacklist; the registry check below is the
+# authoritative gate for bare identifiers (FINDING_A20 fix).
 PROSE_INDICATORS = frozenset({
     "looks good", "seems safe", "should be fine",
     "probably ok", "i think so", "maybe",
@@ -89,6 +93,26 @@ def validate_entry(packet: Dict[str, Any]) -> GuardResult:
                 failed_check="C2_CONDITION_TESTABLE",
                 reason="test is free prose, not machine-checkable",
             )
+        # FINDING_A20 fix (V2): bare identifiers must be registered.
+        # If the test is a bare alphanumeric/underscore string, it must be
+        # a registered predicate. If it contains structural operators, it's
+        # treated as an expression and the heuristic above already accepted it.
+        stripped = test.strip()
+        looks_like_expression = any(
+            c in stripped for c in ("==", ">=", "<=", "!=", "&&", "||", "(", ")")
+        )
+        if not looks_like_expression:
+            # Bare identifier path. Must be registered.
+            if not is_registered_predicate(stripped):
+                return GuardResult(
+                    passed=False,
+                    failed_check="C2_CONDITION_TESTABLE",
+                    reason=(
+                        f"test '{stripped}' is not a registered predicate. "
+                        f"Bare identifiers must be in REGISTERED_PREDICATES. "
+                        f"This is the FINDING_A20 fix."
+                    ),
+                )
         # String test must declare boolean output somewhere
         # Accept if it looks like an expression
     elif isinstance(test, dict):

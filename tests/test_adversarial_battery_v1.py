@@ -469,23 +469,14 @@ def test_A19_audit_records_every_outcome(env):
 # ║   ENTRY GUARD BYPASS (F9, F10)                              ║
 # ╚═════════════════════════════════════════════════════════════╝
 
-@pytest.mark.xfail(
-    reason=(
-        "FINDING_A20: Entry guard's _is_prose() is a syntactic heuristic. "
-        "It cannot distinguish prose-shaped identifiers ('subjective_review') "
-        "from legitimate predicate references ('window_active'). "
-        "This is a defense-in-depth limitation, NOT a bypass of the core "
-        "invariant. The HMAC signature on DecisionRecord remains the hard "
-        "security boundary. See RESULTS_v1.md for full analysis. "
-        "Fix requires a predicate registry, deferred to v2."
-    ),
-    strict=True,
-)
 def test_A20_entry_guard_prose_condition_blocked():
     """A20 → F9: Prose-shaped condition with prose-shaped test name.
 
-    Pre-registered expectation: guard rejects.
-    Actual: guard accepts. Documented as FINDING_A20.
+    HISTORY:
+      v1: Pre-registered expectation: guard rejects. Actual: guard accepted.
+          Recorded as FINDING_A20 in RESULTS_v1.md (xfail strict=True).
+      v2: After predicate registry fix, guard correctly rejects.
+          xfail removed. This test now passes as originally pre-registered.
     """
     result = validate_entry({
         "action": "delete_env",
@@ -493,8 +484,8 @@ def test_A20_entry_guard_prose_condition_blocked():
         "test": "subjective_review",
         "binding": {"on_false": "hold"},
     })
-    assert not result.passed
-    assert result.failed_check in {"C2_CONDITION_TESTABLE", "C2_TEST_TESTABLE"}
+    assert not result.passed, "V2 fix: guard must reject prose-shaped predicate"
+    assert result.failed_check == "C2_CONDITION_TESTABLE"
 
 
 def test_A20b_entry_guard_known_prose_phrases_still_blocked():
@@ -514,27 +505,24 @@ def test_A20b_entry_guard_known_prose_phrases_still_blocked():
         assert result.failed_check == "C2_CONDITION_TESTABLE"
 
 
-def test_A20c_core_invariant_holds_even_when_entry_guard_lax(env):
-    """A20c → The core invariant holds despite FINDING_A20.
+def test_A20c_core_invariant_holds_when_no_decision_record(env):
+    """A20c → The core invariant holds independently of the entry guard.
 
-    Even if the entry guard accepts a prose-shaped test name,
-    no mutation occurs without a valid DecisionRecord at the commit gate.
+    HISTORY:
+      v1: Asserted 'guard accepts prose-shaped packet (FINDING_A20)' as a
+          pre-condition, then proved no mutation occurred without a
+          DecisionRecord.
+      v2: After the fix, the guard correctly rejects the prose-shaped packet,
+          so the original pre-condition is no longer true. The test is
+          rewritten to assert the broader claim it was always proving:
+          regardless of the entry guard's behaviour, no mutation can occur
+          without a valid DecisionRecord at the commit gate.
     """
     store, audit, gate = env
     state_before = store.snapshot()
 
-    # Simulate: entry guard passes a prose-shaped packet
-    packet = {
-        "action": "delete_env",
-        "condition": "looks fine to me",
-        "test": "subjective_review",
-        "binding": {"on_false": "hold"},
-    }
-    guard_result = validate_entry(packet)
-    # We document that A20 finding: guard passes
-    assert guard_result.passed, "Pre-condition: guard accepts (FINDING_A20)"
-
-    # But there is no DecisionRecord, so no mutation
+    # No DecisionRecord = no mutation. This is the core invariant.
+    # The entry guard is defense-in-depth; the commit gate is the hard boundary.
     result = gate.execute(
         action="delete_env",
         object_id="env_1",
@@ -548,12 +536,21 @@ def test_A20c_core_invariant_holds_even_when_entry_guard_lax(env):
 
 
 def test_A21_entry_guard_binding_inversion():
-    """A21 → F9: binding.on_false != 'hold' must fail."""
+    """A21 → F9: binding.on_false != 'hold' must fail.
+
+    HISTORY:
+      v1: Used 'is_window_open' as test name. Passed because the v1 guard's
+          prose heuristic accepted any alphanumeric+underscore string.
+      v2: After the predicate registry fix, 'is_window_open' is correctly
+          rejected at C2 (not in registry). To exercise the BINDING check
+          specifically, this test now uses a registered predicate so C2
+          passes and C3 is the actual failure point.
+    """
     result = validate_entry({
         "action": "delete_env",
         "condition": "real check",
-        "test": "is_window_open",
-        "binding": {"on_false": "allow"},
+        "test": "window_active",  # registered → passes C2
+        "binding": {"on_false": "allow"},  # invalid → fails C3
     })
     assert not result.passed
     assert result.failed_check == "C3_CONDITION_BOUND"
