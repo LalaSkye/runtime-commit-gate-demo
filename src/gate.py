@@ -3,6 +3,9 @@ Commit Gate.
 
 Only path to mutation. Fail-closed.
 Invariant: no valid decision record -> no state mutation.
+
+V3: optional durable NonceLedger (FINDING_B07 fix); issued_at-in-future
+check (FINDING_B22 fix); ledger-first ordering for crash-recovery semantics.
 """
 
 from __future__ import annotations
@@ -14,6 +17,7 @@ from typing import Any, Dict, Optional, Set
 from .audit import AuditLog
 from .decision_record import DecisionRecord, verify_signature
 from .state_store import StateStore
+from .nonce_ledger import NonceLedger
 
 
 # Closed set of governed actions
@@ -33,20 +37,57 @@ class GateResult:
     object_id: Optional[str] = None
 
 
-class CommitGate:
+class _InMemoryNonceSet:
     """
-    Validates decision records, consumes nonces,
-    delegates to state store on full pass, logs all attempts.
+    Legacy in-memory replay protection for V1/V2 compatibility.
+
+    Same interface as NonceLedger.contains/consume but no durability.
     """
 
-    def __init__(self, store: StateStore, audit: AuditLog):
+    def __init__(self) -> None:
+        self._used: Set[str] = set()
+
+    def contains(self, nonce: str) -> bool:
+        if not isinstance(nonce, str):
+            return False
+        return nonce in self._used
+
+    def consume(self, nonce: str, decision_id: str) -> bool:
+        if nonce in self._used:
+            return False
+        self._used.add(nonce)
+        return True
+
+    def reset(self) -> None:
+        self._used.clear()
+
+
+class CommitGate:
+    """
+    Validates decision records, consumes nonces (durably if a NonceLedger
+    is provided), delegates to state store on full pass, logs all attempts.
+    """
+
+    def __init__(
+        self,
+        store: StateStore,
+        audit: AuditLog,
+        nonce_ledger: Optional[NonceLedger] = None,
+    ):
         self._store = store
         self._audit = audit
-        self._used_nonces: Set[str] = set()
+        self._nonces = nonce_ledger if nonce_ledger is not None else _InMemoryNonceSet()
+        # Back-compat shim: tests that touch _used_nonces expect a set-like.
+        # We expose the underlying set when in legacy mode for tests only.
+        if isinstance(self._nonces, _InMemoryNonceSet):
+            self._used_nonces = self._nonces._used  # type: ignore[attr-defined]
+        else:
+            # For durable ledger, expose the in-memory cache as a read-only view.
+            self._used_nonces = self._nonces.all_nonces()  # snapshot
 
     def reset_nonces(self) -> None:
         """Clear nonce registry. For testing only."""
-        self._used_nonces.clear()
+        self._nonces.reset()
 
     def execute(
         self,
@@ -97,7 +138,7 @@ class CommitGate:
             self._log(result, actor_id, environment, decision.decision_id)
             return result
 
-        # ── CHECK 4: Not expired ──
+        # ── CHECK 4: Issuance and expiry windows are well-formed ──
         now = datetime.now(timezone.utc)
         try:
             expires = datetime.fromisoformat(decision.expires_at)
@@ -105,6 +146,31 @@ class CommitGate:
             result = GateResult(
                 allowed=False,
                 reason="INVALID_EXPIRY_FORMAT",
+                decision_id=decision.decision_id,
+                action=action,
+                object_id=object_id,
+            )
+            self._log(result, actor_id, environment, decision.decision_id)
+            return result
+
+        try:
+            issued = datetime.fromisoformat(decision.issued_at)
+        except (ValueError, TypeError):
+            result = GateResult(
+                allowed=False,
+                reason="INVALID_ISSUANCE_FORMAT",
+                decision_id=decision.decision_id,
+                action=action,
+                object_id=object_id,
+            )
+            self._log(result, actor_id, environment, decision.decision_id)
+            return result
+
+        # V3 (FINDING_B22 fix): zero-tolerance future issued_at.
+        if now < issued:
+            result = GateResult(
+                allowed=False,
+                reason="ISSUED_AT_IN_FUTURE",
                 decision_id=decision.decision_id,
                 action=action,
                 object_id=object_id,
@@ -124,7 +190,7 @@ class CommitGate:
             return result
 
         # ── CHECK 5: Nonce not replayed ──
-        if decision.nonce in self._used_nonces:
+        if self._nonces.contains(decision.nonce):
             result = GateResult(
                 allowed=False,
                 reason="NONCE_REPLAYED",
@@ -197,12 +263,29 @@ class CommitGate:
 
         # Extension point: add further checks here before mutation.
 
-        # ── ALL CHECKS PASSED — consume nonce and mutate ──
-        self._used_nonces.add(decision.nonce)
+        # ── ALL CHECKS PASSED ──
+        # V3 ordering: durably consume nonce BEFORE mutation.
+        # If consume returns False here, a concurrent caller already
+        # claimed the nonce. Treat as replay.
+        consumed = self._nonces.consume(decision.nonce, decision.decision_id)
+        if not consumed:
+            result = GateResult(
+                allowed=False,
+                reason="NONCE_REPLAYED",
+                decision_id=decision.decision_id,
+                action=action,
+                object_id=object_id,
+            )
+            self._log(result, actor_id, environment, decision.decision_id)
+            return result
 
         try:
             self._store.apply_mutation(action, object_id, actor_id, params)
         except Exception as e:
+            # Pre-registered design: ledger-first ordering means the nonce
+            # is now consumed even though the mutation did not occur. The
+            # operator must reissue with a new nonce. This is the
+            # conservative choice (no partial mutation).
             result = GateResult(
                 allowed=False,
                 reason=f"MUTATION_ERROR:{str(e)}",
