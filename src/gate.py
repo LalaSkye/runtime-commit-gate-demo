@@ -15,7 +15,12 @@ from datetime import datetime, timezone
 from typing import Any, Dict, Optional, Set
 
 from .audit import AuditLog
-from .decision_record import DecisionRecord, verify_signature
+from .decision_record import (
+    DecisionRecord,
+    canonical_params,
+    hash_params,
+    verify_signature,
+)
 from .state_store import StateStore
 from .nonce_ledger import NonceLedger
 
@@ -25,6 +30,11 @@ GOVERNED_ACTIONS = frozenset({"approve_invoice", "change_limit", "delete_env"})
 
 # Accepted policy versions
 ACCEPTED_POLICY_VERSIONS = frozenset({"2026-03-28.1"})
+
+# V4: actions that legitimately take no params. Records with both
+# params_hash=None and params=None are accepted only for these actions
+# (legacy unbound mode). All other governed actions require V4 binding.
+PARAMETERLESS_ACTIONS = frozenset({"delete_env"})
 
 
 @dataclass(frozen=True)
@@ -261,7 +271,76 @@ class CommitGate:
             self._log(result, actor_id, environment, decision.decision_id)
             return result
 
-        # Extension point: add further checks here before mutation.
+        # ── CHECK 11 (V4): Parameter binding ──
+        # Three legitimate cases for the legacy `execute()` path:
+        #   (i)   decision.params_hash is None AND decision.params is None
+        #         AND caller params is None  -> legacy unbound mode.
+        #         Allowed only for PARAMETERLESS_ACTIONS.
+        #   (ii)  decision.params_hash is not None AND decision.params is None
+        #         -> Mode A. Hash caller params and compare.
+        #   (iii) decision.params is not None -> Mode B record was sent
+        #         to the wrong path. Reject.
+        if decision.params is not None:
+            result = GateResult(
+                allowed=False,
+                reason="WRONG_GATE_PATH",
+                decision_id=decision.decision_id,
+                action=action,
+                object_id=object_id,
+            )
+            self._log(result, actor_id, environment, decision.decision_id)
+            return result
+
+        if decision.params_hash is None:
+            # Legacy unbound mode.
+            if params is not None:
+                # Caller-supplied params with no binding == ambient authority.
+                # Reject: this is the V4 gap closure.
+                result = GateResult(
+                    allowed=False,
+                    reason="PARAMS_NOT_BOUND",
+                    decision_id=decision.decision_id,
+                    action=action,
+                    object_id=object_id,
+                )
+                self._log(result, actor_id, environment, decision.decision_id)
+                return result
+            if action not in PARAMETERLESS_ACTIONS:
+                # Action takes params but record carries no binding.
+                result = GateResult(
+                    allowed=False,
+                    reason="PARAMS_NOT_BOUND",
+                    decision_id=decision.decision_id,
+                    action=action,
+                    object_id=object_id,
+                )
+                self._log(result, actor_id, environment, decision.decision_id)
+                return result
+            # else: parameterless action, no params, no binding. Continue.
+        else:
+            # Mode A: re-hash caller params, compare to signed hash.
+            try:
+                actual = hash_params(params)
+            except Exception as e:
+                result = GateResult(
+                    allowed=False,
+                    reason=f"INVALID_PARAMS_TYPE:{e}",
+                    decision_id=decision.decision_id,
+                    action=action,
+                    object_id=object_id,
+                )
+                self._log(result, actor_id, environment, decision.decision_id)
+                return result
+            if actual != decision.params_hash:
+                result = GateResult(
+                    allowed=False,
+                    reason="PARAMS_HASH_MISMATCH",
+                    decision_id=decision.decision_id,
+                    action=action,
+                    object_id=object_id,
+                )
+                self._log(result, actor_id, environment, decision.decision_id)
+                return result
 
         # ── ALL CHECKS PASSED ──
         # V3 ordering: durably consume nonce BEFORE mutation.
@@ -305,6 +384,160 @@ class CommitGate:
         )
         self._log(result, actor_id, environment, decision.decision_id)
         return result
+
+    def execute_bound(
+        self,
+        action: str,
+        object_id: str,
+        environment: str,
+        actor_id: str,
+        decision: Optional[DecisionRecord] = None,
+    ) -> GateResult:
+        """V4 Mode B path. Reads params from `decision.params` and applies
+        them. Caller cannot supply or override params. A record without
+        embedded params is rejected with WRONG_GATE_PATH.
+        """
+        if decision is None:
+            r = GateResult(allowed=False, reason="NO_DECISION_RECORD",
+                           action=action, object_id=object_id)
+            self._log(r, actor_id, environment, None)
+            return r
+        if decision.params is None:
+            r = GateResult(
+                allowed=False,
+                reason="WRONG_GATE_PATH",
+                decision_id=decision.decision_id,
+                action=action,
+                object_id=object_id,
+            )
+            self._log(r, actor_id, environment, decision.decision_id)
+            return r
+        if decision.params_hash is not None:
+            # Mode B records must not carry params_hash.
+            r = GateResult(
+                allowed=False,
+                reason="WRONG_GATE_PATH",
+                decision_id=decision.decision_id,
+                action=action,
+                object_id=object_id,
+            )
+            self._log(r, actor_id, environment, decision.decision_id)
+            return r
+        # Delegate to execute() with params taken from the record. We pass
+        # them as the params argument so all V1-V11 checks still run, but
+        # we also synthesise a hash so the binding check sees a Mode A
+        # equivalent. To avoid that, we use a small internal flag-shaped
+        # call: bypass the binding check by providing matching hash.
+        # Cleanest path is to call into the same checks directly.
+        return self._execute_with_bound_params(
+            action, object_id, environment, actor_id, decision
+        )
+
+    def _execute_with_bound_params(
+        self,
+        action: str,
+        object_id: str,
+        environment: str,
+        actor_id: str,
+        decision: DecisionRecord,
+    ) -> GateResult:
+        """Internal: same checks as execute() but params come from the
+        record itself. Used by execute_bound().
+        """
+        # Synthesise a Mode A surrogate record so we reuse execute().
+        # The surrogate has params_hash set, params=None, signature
+        # recomputed for verification. But we can't recompute the
+        # signature (we don't have the secret). Instead, run the checks
+        # inline.
+        # ── verdict ──
+        if decision.verdict != "ALLOW":
+            r = GateResult(allowed=False, reason=f"VERDICT_NOT_ALLOW:{decision.verdict}",
+                           decision_id=decision.decision_id, action=action, object_id=object_id)
+            self._log(r, actor_id, environment, decision.decision_id)
+            return r
+        # ── signature ──
+        if not verify_signature(decision):
+            r = GateResult(allowed=False, reason="INVALID_SIGNATURE",
+                           decision_id=decision.decision_id, action=action, object_id=object_id)
+            self._log(r, actor_id, environment, decision.decision_id)
+            return r
+        # ── time windows ──
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc)
+        try:
+            expires = datetime.fromisoformat(decision.expires_at)
+        except (ValueError, TypeError):
+            r = GateResult(allowed=False, reason="INVALID_EXPIRY_FORMAT",
+                           decision_id=decision.decision_id, action=action, object_id=object_id)
+            self._log(r, actor_id, environment, decision.decision_id)
+            return r
+        try:
+            issued = datetime.fromisoformat(decision.issued_at)
+        except (ValueError, TypeError):
+            r = GateResult(allowed=False, reason="INVALID_ISSUANCE_FORMAT",
+                           decision_id=decision.decision_id, action=action, object_id=object_id)
+            self._log(r, actor_id, environment, decision.decision_id)
+            return r
+        if now < issued:
+            r = GateResult(allowed=False, reason="ISSUED_AT_IN_FUTURE",
+                           decision_id=decision.decision_id, action=action, object_id=object_id)
+            self._log(r, actor_id, environment, decision.decision_id)
+            return r
+        if now > expires:
+            r = GateResult(allowed=False, reason="DECISION_EXPIRED",
+                           decision_id=decision.decision_id, action=action, object_id=object_id)
+            self._log(r, actor_id, environment, decision.decision_id)
+            return r
+        # ── nonce replay ──
+        if self._nonces.contains(decision.nonce):
+            r = GateResult(allowed=False, reason="NONCE_REPLAYED",
+                           decision_id=decision.decision_id, action=action, object_id=object_id)
+            self._log(r, actor_id, environment, decision.decision_id)
+            return r
+        # ── action / object / env / policy match ──
+        for got, want, code in [
+            (decision.action, action, "ACTION_MISMATCH"),
+            (decision.object_id, object_id, "OBJECT_MISMATCH"),
+            (decision.environment, environment, "ENVIRONMENT_MISMATCH"),
+        ]:
+            if got != want:
+                r = GateResult(
+                    allowed=False,
+                    reason=f"{code}:requested={want},decision={got}",
+                    decision_id=decision.decision_id,
+                    action=action,
+                    object_id=object_id,
+                )
+                self._log(r, actor_id, environment, decision.decision_id)
+                return r
+        if decision.policy_version not in ACCEPTED_POLICY_VERSIONS:
+            r = GateResult(allowed=False, reason=f"POLICY_VERSION_REJECTED:{decision.policy_version}",
+                           decision_id=decision.decision_id, action=action, object_id=object_id)
+            self._log(r, actor_id, environment, decision.decision_id)
+            return r
+        if action not in GOVERNED_ACTIONS:
+            r = GateResult(allowed=False, reason=f"UNKNOWN_ACTION:{action}",
+                           decision_id=decision.decision_id, action=action, object_id=object_id)
+            self._log(r, actor_id, environment, decision.decision_id)
+            return r
+        # ── consume nonce + apply mutation with embedded params ──
+        consumed = self._nonces.consume(decision.nonce, decision.decision_id)
+        if not consumed:
+            r = GateResult(allowed=False, reason="NONCE_REPLAYED",
+                           decision_id=decision.decision_id, action=action, object_id=object_id)
+            self._log(r, actor_id, environment, decision.decision_id)
+            return r
+        try:
+            self._store.apply_mutation(action, object_id, actor_id, decision.params)
+        except Exception as e:
+            r = GateResult(allowed=False, reason=f"MUTATION_ERROR:{str(e)}",
+                           decision_id=decision.decision_id, action=action, object_id=object_id)
+            self._log(r, actor_id, environment, decision.decision_id)
+            return r
+        r = GateResult(allowed=True, reason="ALL_CHECKS_PASSED",
+                       decision_id=decision.decision_id, action=action, object_id=object_id)
+        self._log(r, actor_id, environment, decision.decision_id)
+        return r
 
     def _log(self, result: GateResult, actor_id: str, environment: str, decision_id: Optional[str]) -> None:
         self._audit.append(
