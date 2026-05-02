@@ -1,4 +1,6 @@
 # runtime-commit-gate-demo
+New to this work? Start here:
+[https://github.com/LalaSkye/start-here](https://github.com/LalaSkye/start-here)
 
 **Invariant:**
 No valid decision record -> no state mutation.
