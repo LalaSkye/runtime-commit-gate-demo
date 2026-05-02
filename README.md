@@ -18,6 +18,12 @@ A minimal execution boundary for governed actions.
 
 No policy engine. No AI. No narrative.
 
+## What this does not prove
+
+This repository does not prove adoption, certification, standardisation, or production readiness.
+
+It demonstrates a bounded execution-control surface that can be run, inspected, and tested.
+
 ## Run
 
 ```bash
