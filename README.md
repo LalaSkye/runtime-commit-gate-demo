@@ -3,26 +3,32 @@ New to this work? Start here:
 [https://github.com/LalaSkye/start-here](https://github.com/LalaSkye/start-here)
 
 **Invariant:**
-No valid decision record -> no state mutation.
+No valid decision record -> no state mutation on the demonstrated path.
 
 ## What this repo shows
 
-A minimal execution boundary for governed actions.
+A minimal path-local execution boundary for governed actions.
 
 - Entry condition guard (condition structure validation)
 - Deterministic commit gate (10 checks, first-fail)
 - Fail-closed behaviour
-- Replay resistance
-- Scope binding
-- Append-only audit
+- Replay resistance on the demonstrated path
+- Scope binding on the demonstrated path
+- Append-only audit as demo evidence
 
 No policy engine. No AI. No narrative.
 
 ## What this does not prove
 
-This repository does not prove adoption, certification, standardisation, or production readiness.
+This repository does not prove adoption, certification, standardisation, production readiness, or path-universal deployment coverage.
 
-It demonstrates a bounded execution-control surface that can be run, inspected, and tested.
+It demonstrates a bounded execution-control surface that can be run, inspected, and tested at its stated scope.
+
+## Current hardening gap
+
+This repository does not currently claim that durable proof is committed before consequence can bind, or that audit durability forms an atomic precondition to mutation.
+
+That proof-consequence ordering / audit durability boundary is tracked in issue #4.
 
 ## Run
 
