@@ -1,26 +1,36 @@
 # runtime-commit-gate-demo
-New to this work? Start here:
-[https://github.com/LalaSkye/start-here](https://github.com/LalaSkye/start-here)
 
-**Invariant:**
+New to this work? Start here: https://github.com/LalaSkye/start-here
+
+## Public disclosure boundary
+
+This repository is a public inspection surface, not full architecture disclosure.
+
+It shows a bounded claim, a runnable evidence object, an inspection path, and the claim limit.
+
+See [`PUBLIC_DISCLOSURE_BOUNDARY.md`](PUBLIC_DISCLOSURE_BOUNDARY.md).
+
+## Invariant
+
 No valid decision record -> no state mutation on the demonstrated path.
 
 ## What this repo shows
 
-A minimal path-local execution boundary for governed actions.
+A minimal path-local execution-boundary demo.
 
-- Entry condition guard (condition structure validation)
-- Deterministic commit gate (10 checks, first-fail)
-- Fail-closed behaviour
-- Replay resistance on the demonstrated path
-- Scope binding on the demonstrated path
-- Append-only audit as demo evidence
+On the demonstrated path:
 
-No policy engine. No AI. No narrative.
+- invalid or missing authority blocks execution
+- replay is blocked
+- scope mismatch is blocked
+- expired authority is blocked
+- valid authority permits the demonstrated action
+
+No policy engine. No AI. No production claim.
 
 ## What this does not prove
 
-This repository does not prove adoption, certification, standardisation, production readiness, or path-universal deployment coverage.
+This repository does not prove adoption, certification, standardisation, production readiness, path-universal deployment coverage, or non-bypassability outside the demonstrated path.
 
 It demonstrates a bounded execution-control surface that can be run, inspected, and tested at its stated scope.
 
@@ -28,151 +38,50 @@ It demonstrates a bounded execution-control surface that can be run, inspected, 
 
 This repository does not currently claim that durable proof is committed before consequence can bind, or that audit durability forms an atomic precondition to mutation.
 
-That proof-consequence ordering / audit durability boundary is tracked in issue #4.
-
 ## Run
 
 ```bash
 python demo/run_demo.py
 ```
 
-Expected:
+Expected result classes:
 
-1. No decision -> BLOCKED
-2. Valid decision -> ALLOWED
-3. Replay same decision -> BLOCKED
-4. Wrong object -> BLOCKED
-5. Expired decision -> BLOCKED
-
-## Decision record (input contract)
-
-```json
-{
-  "decision_id": "dr_001",
-  "actor_id": "user_123",
-  "action": "delete_env",
-  "object_id": "env_1",
-  "environment": "prod",
-  "verdict": "ALLOW",
-  "policy_version": "2026-03-28.1",
-  "issued_at": "2026-03-28T18:00:00Z",
-  "expires_at": "2026-03-28T18:05:00Z",
-  "nonce": "abc123xyz",
-  "signature": "HMAC-SHA256(...)"
-}
+```text
+BLOCKED
+ALLOWED
 ```
 
-## Pipeline
+## Inspection path
 
-```
-request -> entry guard -> commit gate -> mutation -> state store
-```
-
-Entry guard validates condition structure. Commit gate validates decision record.
-Both must pass. Neither trusts the other.
-
-## Entry guard checks
-
-If `entry_condition` is present on the request:
-
-1. condition present and non-empty
-2. test is machine-checkable (not prose)
-3. binding links condition to execution (`on_false` == `hold`)
-4. evaluation context variables declared
-
-First failure -> HOLD. Request never reaches the gate.
-
-See [entry guard spec](docs/entry_guard_spec.md).
-
-## Gate checks (evaluation order)
-
-1. record exists
-2. verdict == ALLOW
-3. signature valid
-4. not expired
-5. nonce unused
-6. action matches
-7. object matches
-8. environment matches
-9. policy version accepted
-10. action is governed
-
-First failure -> stop.
-
-## API (optional)
-
-```bash
-uvicorn src.server:app --reload
-```
-
-| Method | Endpoint | Returns |
-|---|---|---|
-| POST | `/decide` | decision record |
-| POST | `/execute` | gate result |
-| GET | `/state` | current state |
-| GET | `/audit` | append-only log |
-
-## Files
-
-```
-src/entry_guard.py       condition structure validation (Layer 1)
-src/gate.py              commit gate — enforcement boundary (Layer 2)
-src/decision_record.py   input contract + signing
-src/server.py            API — wires entry guard before gate
-src/state_store.py       mutation target
-src/audit.py             append-only log
-tests/                   conformance + integration tests
-demo/run_demo.py         proof sequence
-```
-
-## Tests
-
-```bash
-python -m pytest tests/ -v
-```
-
-42 tests covering: entry guard wiring (6 integration), entry guard unit (13), commit gate adversarial (9), replay, scope mismatch, expiry, signature, valid paths (3 actions). 1 xfail (deferred double-approval).
-
-## Modify the system
-
-This repository is intentionally small enough to change.
-
-Try one modification:
-
-1. Open `src/gate.py`
-2. Remove the expiry check (CHECK 4)
-3. Run:
+Run the demo and tests:
 
 ```bash
 python demo/run_demo.py
 python -m pytest tests/ -v
 ```
 
-Expected: expired decisions will no longer be blocked. The invariant is violated.
+The narrow question this repo answers is:
 
-Restore the check to re-enforce the invariant.
+**Can the demonstrated mutation path proceed without a valid decision record?**
 
-### Extension path
+Expected answer:
 
-Fork the repository and modify the decision checks.
+**No.**
 
-Suggested extensions:
+## What this proves
 
-- Add a new governed action
-- Require two approvals before ALLOW
-- Add dependency checks between actions
-- Add pre-state verification
+On the demonstrated path:
 
-Controlled challenges: [docs/challenges.md](docs/challenges.md)
+- missing decision records block execution
+- valid decision records allow the demonstrated action
+- replay, scope mismatch, expiry, and invalid input are blocked
+- the failure mode can be tested locally
 
-Editable payloads: [examples/](examples/)
+## Scope note
 
-## Docs
+Implementation files are present so the demonstrated path can be run and challenged.
 
-- [Entry guard spec](docs/entry_guard_spec.md)
-- [Decision record spec](docs/decision_record_spec.md)
-- [Gate rules](docs/commit_gate_rules.md)
-- [Challenges](docs/challenges.md)
+This README does not publish an architecture map, component sequence, orchestration model, or protected system design.
 
 ## Provenance
 
